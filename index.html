@@ -65,7 +65,7 @@ ul{list-style:none;margin:6px 0 0;padding:0;font-size:13px}li{display:flex;justi
 <body>
 <div id="app">
 <header>
-<div><select id="sym" aria-label="Par"><option value="BTCUSDT">BTCUSDT</option><option value="ETHUSDT">ETHUSDT</option><option value="SOLUSDT">SOLUSDT</option><option value="BNBUSDT">BNBUSDT</option><option value="XRPUSDT">XRPUSDT</option></select><div id="chg">–</div></div>
+<div><select id="sym" aria-label="Par" autocomplete="off"><option value="BTCUSDT">BTCUSDT</option><option value="ETHUSDT">ETHUSDT</option><option value="SOLUSDT">SOLUSDT</option><option value="BNBUSDT">BNBUSDT</option><option value="XRPUSDT">XRPUSDT</option></select><div id="chg">–</div></div>
 <div class="hr"><span id="dot"></span><span id="st">Conectando…</span></div>
 </header>
 <section id="wrap">
@@ -75,7 +75,7 @@ ul{list-style:none;margin:6px 0 0;padding:0;font-size:13px}li{display:flex;justi
 <div id="hint"></div>
 </section>
 <nav id="tb">
-<select id="tfsel" aria-label="Temporalidad"><option value="1m">1m</option><option value="5m">5m</option><option value="15m">15m</option><option value="1h">1H</option><option value="4h">4H</option><option value="1D">1D</option></select>
+<select id="tfsel" aria-label="Temporalidad" autocomplete="off"><option value="1m">1m</option><option value="5m">5m</option><option value="15m">15m</option><option value="1h">1H</option><option value="4h">4H</option><option value="1D">1D</option></select>
 <button id="bdraw" aria-label="Dibujar"><svg class="i" viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg></button>
 <button id="bind" aria-label="Indicadores"><svg class="i" viewBox="0 0 24 24"><path d="M3 21h18M4 16l5-6 4 3 7-8"/></svg></button>
 <button id="bal" aria-label="Alarmas"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="13" r="7"/><path d="M12 9v4l3 2M5 4L2 7M19 4l3 3"/></svg></button>
@@ -136,7 +136,7 @@ const smaV=(r,n)=>{const v=r.filter(x=>x.value!=null),o=[];let s=0;v.forEach((x,
 const emaV=(v,n)=>{const k=2/(n+1);let e=v[0];return v.map((x,i)=>i?(e=x*k+e*(1-k)):e)};
 const macd=c=>{const cl=c.map(x=>x.close),a=emaV(cl,12),b=emaV(cl,26),m=a.map((x,i)=>x-b[i]),sg=emaV(m,9),H=[],M=[],S=[];
  c.forEach((x,i)=>{if(i<33){H.push({time:x.time});M.push({time:x.time});S.push({time:x.time});return}
-  const h=m[i]-sg[i];H.push({time:x.time,value:h,color:h>=0?UP:DN});M.push({time:x.time,value:m[i]});S.push({time:x.time,value:sg[i]})});return{H,M,S}};
+  const h=m[i]-sg[i];const ph=i>33?m[i-1]-sg[i-1]:h;H.push({time:x.time,value:h,color:h>=0?(h>=ph?'#26a69a':'#b2dfdb'):(h<=ph?'#ff5252':'#ffcdd2')});M.push({time:x.time,value:m[i]});S.push({time:x.time,value:sg[i]})});return{H,M,S}};
 const MAS=[[25,'#29b6d9'],[50,'#4caf50'],[100,'#f7e03c'],[200,'#ef5350']];
 
 /* Gráficos: precio, RSI y MACD */
@@ -149,12 +149,12 @@ const cs=chart.addCandlestickSeries({upColor:UP,downColor:DN,borderUpColor:UP,bo
 const L1=(ch,col,w=1,lv=true)=>ch.addLineSeries({color:col,lineWidth:w,priceLineVisible:false,lastValueVisible:lv,crosshairMarkerVisible:false});
 const sMA=MAS.map(([n,col])=>L1(chart,col));
 const bU=L1(chart,'#9b8bd6',1,false),bM=L1(chart,'#9b8bd6',1,false),bL=L1(chart,'#9b8bd6',1,false);
-const R01={autoscaleInfoProvider:()=>({priceRange:{minValue:0,maxValue:100}})};
-const sRsi=rc.addLineSeries({color:'#9575cd',lineWidth:1,priceLineVisible:false,...R01});
-const sRsiMa=rc.addLineSeries({color:'#f7e03c',lineWidth:1,priceLineVisible:false,lastValueVisible:false,...R01});
-[70,30].forEach(p=>sRsi.createPriceLine({price:p,color:'#4a5058',lineWidth:1,lineStyle:2,axisLabelVisible:false,title:''}));
-const sMh=mc.addHistogramSeries({priceLineVisible:false,lastValueVisible:false});
-const sMm=L1(mc,'#2196f3'),sMs=L1(mc,'#ff6d00');
+const R01={autoscaleInfoProvider:o=>{const r=o();if(r&&r.priceRange){r.priceRange.minValue=Math.min(r.priceRange.minValue,28);r.priceRange.maxValue=Math.max(r.priceRange.maxValue,72)}return r}};
+const sRsi=rc.addLineSeries({color:'#7e57c2',lineWidth:1,priceLineVisible:false,...R01});
+const sRsiMa=rc.addLineSeries({color:'#f7e03c',lineWidth:1,priceLineVisible:false,lastValueVisible:false,visible:false});
+[70,30].forEach(p=>sRsi.createPriceLine({price:p,color:'#787b86',lineWidth:1,lineStyle:3,axisLabelVisible:false,title:''}));
+const sMh=mc.addHistogramSeries({priceLineVisible:false,lastValueVisible:true});
+const sMm=L1(mc,'#2962ff'),sMs=L1(mc,'#ff6d00');
 const charts=[chart,rc,mc];let syncing=false;
 charts.forEach((a,i)=>a.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(!r||syncing)return;syncing=true;charts.forEach((b,j)=>{if(j!==i)b.timeScale().setVisibleLogicalRange(r)});syncing=false}));
 
@@ -172,8 +172,7 @@ function setInf(c){c=c||lastC();if(!c)return;const ch=c.close-c.open,pc=ch/c.ope
  $('i1').textContent=sym+' · '+TFL[tf]+' · Mi Trading';
  $('i2').innerHTML='<span class="'+cl+'">'+fmt(c.close,d)+'&nbsp; '+(ch>=0?'+':'')+fmt(ch,d)+' ('+(ch>=0?'+':'')+fmt(pc)+'%)</span>';
  $('i3').innerHTML=on.ma?'MA '+MAS.map(([n,col])=>'<span style="color:'+col+'">'+n+'</span>').join(' '):''}
-function setPaneLabels(I){if(!I)return;const v=a=>{const x=a[a.length-1];return x&&x.value!=null?fmt(x.value):'–'};
- $('rl').textContent='RSI 14 SMA 14  '+v(I.r)+'  '+v(I.rs);$('ml').textContent='MACD 12 26 9  '+v(I.mc.H)+'  '+v(I.mc.M)+'  '+v(I.mc.S)}
+function setPaneLabels(){$('rl').textContent='RSI 14 SMA 14';$('ml').textContent='MACD 12 26 close 9'}
 const inf=document.createElement('div');inf.id='inf';inf.innerHTML='<div class="a" id="i1"></div><div class="b" id="i2"></div><div class="a" id="i3"></div>';$('c').appendChild(inf);
 chart.subscribeCrosshairMove(p=>{const d=p&&p.seriesData?p.seriesData.get(cs):null;setInf(d&&d.close!=null?d:null)});
 
@@ -259,10 +258,13 @@ cEl.addEventListener('pointerup',e=>{if(!dn)return;const d=dn;dn=null;
 cEl.addEventListener('pointercancel',()=>{dn=null},true);
 
 const svg=$('svg');let lastSvg='';
+const rb=document.createElement('div');rb.style.cssText='position:absolute;left:0;pointer-events:none;background:rgba(126,87,194,.10);display:none';$('r').appendChild(rb);
 function place(el,pr){const y=pr==null?null:cs.priceToCoordinate(pr);if(y==null||y<-12||y>H+12){el.style.display='none';return false}el.style.display='flex';el.style.top=y+'px';return true}
 function loop(){requestAnimationFrame(loop);
  const pw=chart.priceScale('right').width?chart.priceScale('right').width():72,th=chart.timeScale().height?chart.timeScale().height():0;
  W=Math.max(0,cEl.clientWidth-pw);H=Math.max(0,cEl.clientHeight-th);ov.style.width=W+'px';ov.style.height=H+'px';
+ const rpw=rc.priceScale('right').width?rc.priceScale('right').width():72,ya=sRsi.priceToCoordinate(70),yb=sRsi.priceToCoordinate(30);
+ if(on.rsi&&ya!=null&&yb!=null){rb.style.display='block';rb.style.top=ya+'px';rb.style.height=Math.max(0,yb-ya)+'px';rb.style.width=Math.max(0,$('r').clientWidth-rpw)+'px'}else rb.style.display='none';
  let h='';const ts=chart.timeScale(),X=t=>ts.logicalToCoordinate(t2L(t)),Y=p=>cs.priceToCoordinate(p);
  if(cands.length){
   draws.forEach(d=>{if(d.k==='h')return;const x1=X(d.t1),x2=X(d.t2),y1=Y(d.p1),y2=Y(d.p2);if(x1==null||x2==null||y1==null||y2==null)return;
@@ -317,6 +319,7 @@ async function loadTicker(){try{const t=await api('/api/v3/ticker/24hr?symbol='+
  $('chg').textContent=(ch>=0?'+':'')+fmt(ch)+'%';$('chg').className=ch>=0?'up':'down'}catch(e){}}
 setInterval(loadTicker,60000);
 $('tfsel').value=tf;toolsUI();load();render();loop();
+addEventListener('pageshow',()=>{$('tfsel').value=tf;$('sym').value=sym});
 </script>
 </body>
 </html>

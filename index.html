@@ -29,7 +29,8 @@ label{display:block;font-size:13px;color:var(--muted)}
 input{width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
 .btn{padding:12px;border:0;border-radius:8px;font:inherit;font-weight:650;color:#fff;cursor:pointer}
 .long{background:var(--up)}.short{background:var(--down)}.neutral{background:var(--ink);color:var(--bg)}
-.bar{position:fixed;left:0;right:0;bottom:0;max-width:560px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;background:var(--panel);border-top:1px solid var(--line);padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px))}
+.bar{position:fixed;left:0;right:0;bottom:0;max-width:560px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;background:var(--panel);border-top:1px solid var(--line);padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));z-index:50}
+#hint{font-size:12px;color:var(--amber);min-height:16px;margin:0 2px 4px}
 .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:6px 12px;margin-top:10px;font-size:14px}
 .stats span{color:var(--muted)}
 .up{color:var(--up)}.down{color:var(--down)}
@@ -49,6 +50,8 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 <div id="st">Conectando…</div>
 <div class="row" id="tfs"></div>
 <div class="row" id="inds"></div>
+<div class="row" id="tools"><button class="chip" data-tool="h">Horizontal</button><button class="chip" data-tool="t">Tendencia</button><button class="chip" id="undo">Deshacer</button><button class="chip" id="clr">Borrar todo</button></div>
+<div id="hint"></div>
 <div class="box"><div id="c"></div><div id="r"></div></div>
 
 <section class="panel">
@@ -160,6 +163,31 @@ $('reset').onclick=()=>{realized=0;pos=null;hist=[];events=[];msg('Simulador rei
 $('cap').oninput=render;
 $('sym').onchange=e=>{if(pos){e.target.value=sym;msg('Cierra tu posición antes de cambiar de par.');return}sym=e.target.value;load()};
 
+/* Dibujos (se guardan por par en el celular) */
+let tool=null,pend=null,draws=[],objs=[];
+const dkey=()=>'dib-'+sym;
+function loadDraws(){try{draws=JSON.parse(localStorage.getItem(dkey())||'[]')}catch(e){draws=[]}}
+function saveDraws(){try{localStorage.setItem(dkey(),JSON.stringify(draws))}catch(e){}}
+function clearObjs(){objs.forEach(o=>{if(o.line)cs.removePriceLine(o.line);else chart.removeSeries(o.series)});objs=[]}
+function drawAll(){clearObjs();draws.forEach(d=>{
+ if(d.k==='h'){objs.push({line:cs.createPriceLine({price:d.p,color:'#e8618c',lineWidth:1,lineStyle:0,axisLabelVisible:true,title:''})});return}
+ const a=bucket(d.t1+off),b=bucket(d.t2+off);if(a===b||!cands.length||a<cands[0].time)return;
+ const s=chart.addLineSeries({color:'#3ec1d3',lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+ s.setData([{time:a,value:d.p1},{time:b,value:d.p2}]);objs.push({series:s})})}
+function hint(){$('hint').textContent=tool==='h'?'Toca el gráfico donde quieras la línea.':tool==='t'?(pend?'Toca el segundo punto.':'Toca el primer punto.'):''}
+document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{const t=b.dataset.tool;tool=tool===t?null:t;pend=null;
+ document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('on',x.dataset.tool===tool));hint()});
+chart.subscribeClick(p=>{if(!tool||!p.point)return;const pr=cs.coordinateToPrice(p.point.y);if(pr==null)return;
+ if(tool==='h'){draws.push({k:'h',p:pr});saveDraws();drawAll();return}
+ if(!p.time){$('hint').textContent='Toca sobre las velas.';return}
+ if(!pend){pend={t:p.time-off,p:pr};hint();return}
+ let a=pend,b={t:p.time-off,p:pr};
+ if(a.t===b.t){$('hint').textContent='Elige un punto en otra vela.';return}
+ if(a.t>b.t){const x=a;a=b;b=x}
+ draws.push({k:'t',t1:a.t,p1:a.p,t2:b.t,p2:b.p});pend=null;saveDraws();drawAll();hint()});
+$('undo').onclick=()=>{draws.pop();saveDraws();drawAll()};
+$('clr').onclick=()=>{if(draws.length&&confirm('¿Borrar todos los dibujos de este par?')){draws=[];saveDraws();drawAll()}};
+
 /* Datos reales de Binance */
 async function load(){const my=++loadId;if(ws)ws.close();status('Conectando…');
  try{const k=await api('/api/v3/klines?symbol='+sym+'&interval='+IV[tf]+'&limit=1000');if(my!==loadId)return;
@@ -167,7 +195,7 @@ async function load(){const my=++loadId;if(ws)ws.close();status('Conectando…')
   const d=dp(price());cs.applyOptions({priceFormat:{type:'price',precision:d,minMove:1/Math.pow(10,d)}});
   cs.setData(cands);sSma.setData(sma(cands,20));sEma.setData(ema(cands,50));
   const b=bb(cands);bU.setData(b.u);bM.setData(b.mid);bL.setData(b.l);sRsi.setData(rsi(cands));
-  const n=cands.length;chart.timeScale().setVisibleLogicalRange({from:n-90,to:n+6});applyVis();drawMarkers();drawLine();
+  const n=cands.length;chart.timeScale().setVisibleLogicalRange({from:n-90,to:n+6});applyVis();drawMarkers();drawLine();pend=null;hint();loadDraws();drawAll();
   $('price').textContent=fmt(price(),d);render();connect(my,0);loadTicker()}
  catch(e){if(my===loadId)status('No se pudo conectar a Binance. Revisa tu internet y recarga la página.',true)}}
 function connect(my,i){if(my!==loadId)return;ws=new WebSocket(WSS[i%2]+sym.toLowerCase()+'@kline_'+IV[tf]);

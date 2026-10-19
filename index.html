@@ -33,6 +33,7 @@ select{font:inherit;color:var(--ink);background:transparent;border:0;appearance:
 .dt{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:none;gap:2px;align-items:center;pointer-events:auto;background:#1b1d20;border:1px solid var(--line);border-radius:12px;padding:4px 6px}
 .dt button{background:transparent;border:0;color:var(--ink);width:44px;height:40px;border-radius:8px;display:grid;place-items:center}
 .dt button.on{background:#2c3238;color:var(--cy)}
+.dt svg{position:static;width:22px;height:22px}
 svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 #tb{display:flex;align-items:center;justify-content:space-between;padding:4px 14px;border-top:1px solid var(--line)}
 #tfsel{font-size:18px;font-weight:650;padding:8px 6px}
@@ -102,7 +103,8 @@ ul{list-style:none;margin:6px 0 0;padding:0;font-size:13px}li{display:flex;justi
 <div class="stats"><div><span>Saldo total</span><br><b id="eq">–</b></div><div><span>Posición abierta</span><br><b id="open">Ninguna</b></div><div><span>Operaciones</span><br><b id="nt">0</b></div><div><span>Aciertos</span><br><b id="wr">–</b></div></div>
 <ul id="hist"></ul>
 <button class="rb" id="reset">Reiniciar simulador</button>
-<p class="note">Precios reales de Binance con operaciones simuladas (sin dinero real). Comisión simulada: 0,1% por lado.</p></div>
+<p class="note">Precios reales de Binance con operaciones simuladas (sin dinero real). Comisión simulada: 0,1% por lado.</p>
+<p class="note">Versión: 19 oct · replay y dibujos (b)</p></div>
 
 <div class="sheet" id="s-al"><h2>Nueva alarma</h2><p class="note" style="margin:0 0 12px" id="al-par"></p>
 <button class="rb" id="al-pick" style="margin:0 0 14px">Elegir tocando el gráfico (precio o RSI)</button>

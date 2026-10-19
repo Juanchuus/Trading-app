@@ -60,6 +60,8 @@ ul{list-style:none;margin:6px 0 0;padding:0;font-size:13px}li{display:flex;justi
 .rb{width:100%;margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:12px;background:transparent;color:var(--ink);font:inherit}
 .sheet select{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:#0b0c0d;color:var(--ink);appearance:auto;-webkit-appearance:menulist}
 .al{position:absolute;left:6px;display:none;align-items:center;gap:3px;transform:translateY(-50%);background:#2f80ed;color:#fff;border-radius:8px;padding:1px 6px;font-size:11px;font-weight:600;white-space:nowrap;pointer-events:none}
+#rpbar{display:none;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid var(--line);background:#0b0c0d;font-size:12px;color:var(--muted)}
+#rpbar .chip{margin:0;padding:7px 11px;font-size:13px}#rptime{flex:1;text-align:center}
 .note{font-size:12px;color:var(--muted);margin:12px 0 0}
 </style>
 </head>
@@ -75,10 +77,12 @@ ul{list-style:none;margin:6px 0 0;padding:0;font-size:13px}li{display:flex;justi
 <div id="m" class="sub"><div class="pl" id="ml"></div></div>
 <div id="hint"></div>
 </section>
+<div id="rpbar"><button class="chip" id="rpplay">⏸ Pausar</button><button class="chip" id="rpstep">Paso ⏭</button><button class="chip" id="rpspd">1x</button><span id="rptime"></span><button class="chip" id="rpexit">Salir</button></div>
 <nav id="tb">
 <select id="tfsel" aria-label="Temporalidad" autocomplete="off"><option value="1m">1m</option><option value="5m">5m</option><option value="15m">15m</option><option value="1h">1H</option><option value="4h">4H</option><option value="1D">1D</option></select>
 <button id="bdraw" aria-label="Dibujar"><svg class="i" viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg></button>
 <button id="bind" aria-label="Indicadores"><svg class="i" viewBox="0 0 24 24"><path d="M3 21h18M4 16l5-6 4 3 7-8"/></svg></button>
+<button id="brp" aria-label="Replay"><svg class="i" viewBox="0 0 24 24"><path d="M19 20L9 12l10-8zM5 4v16"/></svg></button>
 <button id="bal" aria-label="Alarmas"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="13" r="7"/><path d="M12 9v4l3 2M5 4L2 7M19 4l3 3"/></svg></button>
 <button id="bacc" aria-label="Cuenta"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg></button>
 </nav>
@@ -122,7 +126,7 @@ const HOSTS=['https://data-api.binance.vision','https://api.binance.com'];
 const WSS=['wss://data-stream.binance.vision/ws/','wss://stream.binance.com:9443/ws/'];
 const off=-new Date().getTimezoneOffset()*60;
 const UP='#26c281',DN='#f6616b';
-let tf='1m',sym='BTCUSDT',cands=[],ws=null,loadId=0;
+let tf='1m',sym='BTCUSDT',cands=[],ws=null,loadId=0,rp={on:false},rpArm=false;
 const status=(s,err)=>{$('st').textContent=s;$('dot').className=err?'e':(s.indexOf('En vivo')===0?'ok':'')};
 async function api(p){for(const h of HOSTS){try{const r=await fetch(h+p);if(r.ok)return await r.json()}catch(e){}}throw new Error('sin conexión')}
 let tt;function msg(s){const t=$('toast');clearTimeout(tt);if(!s){t.style.display='none';return}t.textContent=s;t.style.display='block';tt=setTimeout(()=>{t.style.display='none'},3500)}
@@ -193,14 +197,14 @@ function drawLine(){lvls.forEach(l=>cs.removePriceLine(l));lvls=[];if(!pos||pos.
  mk(pos.entry,'#3ec1d3','Entrada');if(pos.tp!=null)mk(pos.tp,UP,'TP');if(pos.sl!=null)mk(pos.sl,DN,'SL')}
 function setLv(){const sl=parseFloat($('sl').value),tp=parseFloat($('tp').value);
  pos.sl=sl>0?pos.entry*(1-pos.side*sl/100):null;pos.tp=tp>0?pos.entry*(1+pos.side*tp/100):null}
-const nowT=()=>Math.floor(Date.now()/1000)+off;
+const nowT=()=>rp.on&&cands.length?lastC().time:Math.floor(Date.now()/1000)+off;
 const unreal=()=>pos&&pos.sym===sym?pos.side*(price()-pos.entry)*pos.qty:0;
 function openPos(side){if(pos){msg('Ya tienes una posición abierta. Ciérrala con la ✕ de la etiqueta.');return}
  const a=parseFloat($('amt').value),eq=parseFloat($('cap').value)+realized;
  if(!price()){msg('Esperando precios…');return}
  if(!(a>0)){msg('Escribe un monto válido.');return}if(a>eq){msg('El monto supera tu saldo disponible.');return}
  pos={sym,side,entry:price(),qty:a/price(),amount:a,sl:null,tp:null};setLv();events.push({time:nowT(),kind:'in',side,sym});msg('');drawMarkers();drawLine();render()}
-function closePos(why){if(!pos)return;const ex=price(),pnl=pos.side*(ex-pos.entry)*pos.qty-pos.amount*0.001*2;
+function closePos(why,px){if(!pos)return;const ex=px!=null?px:price(),pnl=pos.side*(ex-pos.entry)*pos.qty-pos.amount*0.001*2;
  realized+=pnl;hist.unshift({sym:pos.sym,side:pos.side,entry:pos.entry,exit:ex,pnl});events.push({time:nowT(),kind:'out',side:pos.side,sym:pos.sym});
  pos=null;msg(why||'');drawMarkers();drawLine();render()}
 function render(){const u=unreal(),cap=parseFloat($('cap').value)||0,eq=cap+realized+u;
@@ -212,8 +216,8 @@ function render(){const u=unreal(),cap=parseFloat($('cap').value)||0,eq=cap+real
 $('buy').onclick=()=>openPos(1);$('sell').onclick=()=>openPos(-1);
 $('reset').onclick=()=>{realized=0;pos=null;hist=[];events=[];msg('Simulador reiniciado.');drawMarkers();drawLine();render()};
 $('cap').oninput=render;
-$('sym').onchange=e=>{if(pos){e.target.value=sym;msg('Cierra tu posición antes de cambiar de par.');return}sym=e.target.value;load()};
-$('tfsel').onchange=e=>{tf=e.target.value;load()};
+$('sym').onchange=e=>{if(pos){e.target.value=sym;msg('Cierra tu posición antes de cambiar de par.');return}sym=e.target.value;if(rp.on){exitReplay();return}load()};
+$('tfsel').onchange=e=>{tf=e.target.value;if(rp.on){exitReplay();return}load()};
 
 /* Dibujos y etiquetas sobre el gráfico */
 const ov=document.createElement('div');ov.className='ov';
@@ -227,10 +231,10 @@ function loadDraws(){try{draws=JSON.parse(localStorage.getItem(dkey())||'[]')}ca
 function saveDraws(){try{localStorage.setItem(dkey(),JSON.stringify(draws))}catch(e){}}
 function drawAll(){objs.forEach(l=>cs.removePriceLine(l));objs=[];
  draws.forEach(d=>{if(d.k==='h')objs.push(cs.createPriceLine({price:d.p,color:'#e8618c',lineWidth:1,lineStyle:0,axisLabelVisible:true,title:''}))})}
-function hint(){const t=alArm?'Toca el precio o el RSI donde quieras la alarma':setLvl==='tp'?'Toca el gráfico para fijar tu take profit':setLvl==='sl'?'Toca el gráfico para fijar tu stop loss':
+function hint(){$('brp').classList.toggle('on',!!(rpArm||rp.on));const t=rpArm?'Toca la vela donde quieres empezar el replay':alArm?'Toca el precio o el RSI donde quieras la alarma':setLvl==='tp'?'Toca el gráfico para fijar tu take profit':setLvl==='sl'?'Toca el gráfico para fijar tu stop loss':
  tool==='h'?'Toca donde quieras la línea':tool==='t'||tool==='r'?(pend?'Toca el segundo punto':'Toca el primer punto'):'';
  $('hint').textContent=t;$('hint').style.display=t?'block':'none'}
-function toolsUI(){if(tool||setLvl)alArm=false;document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('on',x.dataset.tool===tool));
+function toolsUI(){if(tool||setLvl){alArm=false;rpArm=false}document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('on',x.dataset.tool===tool));
  $('ptp').classList.toggle('act',setLvl==='tp');$('psl').classList.toggle('act',setLvl==='sl');$('bdraw').classList.toggle('on',dtOn)}
 document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{const t=b.dataset.tool;tool=tool===t?null:t;pend=null;setLvl=null;toolsUI();hint()});
 $('bdraw').onclick=()=>{dtOn=!dtOn;$('dt').style.display=dtOn?'flex':'none';if(!dtOn){tool=null;pend=null}toolsUI();hint()};
@@ -243,6 +247,7 @@ $('clr').onclick=()=>{if(draws.length&&confirm('¿Borrar todos los dibujos de es
 const t2L=t=>{const n=cands.length;return n-1+((t+off)-cands[n-1].time)/SEC[tf]};
 const L2t=L=>{const n=cands.length;return cands[n-1].time+(L-(n-1))*SEC[tf]-off};
 function tap(x,y){if(!cands.length||x<0||y<0||x>W||y>H)return;const pr=cs.coordinateToPrice(y);if(pr==null)return;
+ if(rpArm){startReplay(x);return}
  if(alArm){openAlarm('p',pr);return}
  if(setLvl){const d=pos&&pos.sym===sym?pos.side:0;if(!d){setLvl=null;toolsUI();hint();return}
   const ok=setLvl==='tp'?d*(pr-pos.entry)>0:d*(pr-pos.entry)<0;
@@ -315,6 +320,44 @@ function drawAlarms(){alObjs.forEach(o=>{try{o.s.removePriceLine(o.l)}catch(e){}
   box.appendChild(el);alObjs.push({s,l,el,val:x.val})})}
 async function fetchAlarms(){try{const r=await fetch('alertas.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();alData=j.alarmas||[];drawAlarms()}catch(e){}}
 setInterval(fetchAlarms,60000);
+/* Modo replay: reproduce el pasado vela por vela */
+const SPD=[1,2,5,10];
+function rpUI(){const on=rp.on;$('rpbar').style.display=on?'flex':'none';if(!on)return;
+ $('rpplay').textContent=rp.play?'⏸ Pausar':'▶ Reproducir';$('rpspd').textContent=SPD[rp.si]+'x';
+ const c=lastC();if(c)$('rptime').textContent=new Date(c.time*1000).toLocaleString('es-AR',{timeZone:'UTC',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}
+function rpTimer(){clearInterval(rp.t);if(rp.play)rp.t=setInterval(stepReplay,1000/SPD[rp.si]);rpUI()}
+function setReplayData(){cands=rp.full.slice(0,rp.i+1);cs.setData(cands);const N=IND(cands);
+ sMA.forEach((s,i)=>s.setData(N.m[i]));bU.setData(N.b.u);bM.setData(N.b.mid);bL.setData(N.b.l);
+ sRsi.setData(N.r);sRsiMa.setData(N.rs);sMh.setData(N.mc.H);sMm.setData(N.mc.M);sMs.setData(N.mc.S);
+ const n=cands.length;chart.timeScale().setVisibleLogicalRange({from:n-90,to:n+8});
+ drawMarkers();drawLine();setInf();setPaneLabels(N);render()}
+function startReplay(x){rpArm=false;const L=chart.timeScale().coordinateToLogical(x);if(L==null){hint();return}
+ const full=cands.slice(),i=Math.max(60,Math.min(full.length-2,Math.round(L)));
+ loadId++;if(ws)ws.close();
+ rp={on:true,full,i,play:true,si:0,evStart:events.length};
+ status('Replay');setReplayData();hint();rpTimer()}
+function stepReplay(){if(!rp.on)return;
+ if(rp.i>=rp.full.length-1){rp.play=false;rpTimer();msg('Llegaste al final de los datos disponibles.');return}
+ rp.i++;const c=rp.full[rp.i];cands.push(c);cs.update(c);
+ const N=IND(cands.slice(-400)),la=a=>a[a.length-1];
+ sMA.forEach((s,i)=>s.update(la(N.m[i])));bU.update(la(N.b.u));bM.update(la(N.b.mid));bL.update(la(N.b.l));
+ sRsi.update(la(N.r));sRsiMa.update(la(N.rs));sMh.update(la(N.mc.H));sMm.update(la(N.mc.M));sMs.update(la(N.mc.S));
+ setInf();setPaneLabels(N);
+ if(pos&&pos.sym===sym){const d=pos.side;let px=null,w='';
+  if(pos.sl!=null&&(d>0?c.low<=pos.sl:c.high>=pos.sl)){px=pos.sl;w='Stop loss alcanzado.'}
+  else if(pos.tp!=null&&(d>0?c.high>=pos.tp:c.low<=pos.tp)){px=pos.tp;w='Take profit alcanzado.'}
+  if(px!=null)closePos(w,px)}
+ render();rpUI()}
+function exitReplay(){if(!rp.on)return;clearInterval(rp.t);if(pos)closePos('Replay terminado: se cerró tu posición.');
+ events.length=Math.min(events.length,rp.evStart);rp={on:false};rpUI();hint();status('Conectando…');load()}
+$('rpplay').onclick=()=>{rp.play=!rp.play;rpTimer()};
+$('rpstep').onclick=()=>{rp.play=false;rpTimer();stepReplay()};
+$('rpspd').onclick=()=>{rp.si=(rp.si+1)%SPD.length;rpTimer()};
+$('rpexit').onclick=exitReplay;
+$('brp').onclick=()=>{if(rp.on){exitReplay();return}if(rpArm){rpArm=false;hint();return}
+ if(pos){msg('Cierra tu posición antes de iniciar el replay.');return}
+ tool=null;setLvl=null;pend=null;alArm=false;rpArm=true;toolsUI();hint()};
+
 /* Paneles */
 function closeSheets(){clearTmp();document.querySelectorAll('.sheet').forEach(x=>{x.style.display='none'});$('bd').style.display='none'}
 function sheet(id){const o=$(id).style.display!=='block';closeSheets();if(o){$(id).style.display='block';$('bd').style.display='block'}}

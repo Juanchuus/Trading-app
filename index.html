@@ -104,7 +104,7 @@ ul{list-style:none;margin:6px 0 0;padding:0;font-size:13px}li{display:flex;justi
 <ul id="hist"></ul>
 <button class="rb" id="reset">Reiniciar simulador</button>
 <p class="note">Precios reales de Binance con operaciones simuladas (sin dinero real). Comisión simulada: 0,1% por lado.</p>
-<p class="note">Versión: 19 oct · replay y dibujos (b)</p></div>
+<p class="note">Versión: 19 oct · rectángulo con arrastre (c)</p></div>
 
 <div class="sheet" id="s-al"><h2>Nueva alarma</h2><p class="note" style="margin:0 0 12px" id="al-par"></p>
 <button class="rb" id="al-pick" style="margin:0 0 14px">Elegir tocando el gráfico (precio o RSI)</button>
@@ -205,9 +205,9 @@ function openPos(side){if(pos){msg('Ya tienes una posición abierta. Ciérrala c
  const a=parseFloat($('amt').value),eq=parseFloat($('cap').value)+realized;
  if(!price()){msg('Esperando precios…');return}
  if(!(a>0)){msg('Escribe un monto válido.');return}if(a>eq){msg('El monto supera tu saldo disponible.');return}
- pos={sym,side,entry:price(),qty:a/price(),amount:a,sl:null,tp:null};setLv();events.push({time:nowT(),kind:'in',side,sym});msg('');drawMarkers();drawLine();render()}
+ pos={sym,side,entry:price(),qty:a/price(),amount:a,sl:null,tp:null};setLv();events.push({time:nowT(),kind:'in',side,sym,rpl:rp.on});msg('');drawMarkers();drawLine();render()}
 function closePos(why,px){if(!pos)return;const ex=px!=null?px:price(),pnl=pos.side*(ex-pos.entry)*pos.qty-pos.amount*0.001*2;
- realized+=pnl;hist.unshift({sym:pos.sym,side:pos.side,entry:pos.entry,exit:ex,pnl});events.push({time:nowT(),kind:'out',side:pos.side,sym:pos.sym});
+ realized+=pnl;hist.unshift({sym:pos.sym,side:pos.side,entry:pos.entry,exit:ex,pnl});events.push({time:nowT(),kind:'out',side:pos.side,sym:pos.sym,rpl:rp.on});
  pos=null;msg(why||'');drawMarkers();drawLine();render()}
 function render(){const u=unreal(),cap=parseFloat($('cap').value)||0,eq=cap+realized+u;
  $('eq').textContent='$'+fmt(eq);$('eq').className=eq>=cap?'up':'down';
@@ -227,16 +227,16 @@ const I=p=>'<svg class="i" viewBox="0 0 24 24">'+p+'</svg>';
 ov.innerHTML='<svg id="svg"></svg><div class="pt g" id="pt"><span class="tb" id="ptp">TP</span><span class="tb" id="psl">SL</span><span id="ppn"></span><span class="tb" id="pcl">✕</span></div><div class="lt" id="ltp" style="background:var(--up)"></div><div class="lt" id="lsl" style="background:var(--down)"></div>'+
  '<div class="dt" id="dt"><button data-tool="t" aria-label="Tendencia">'+I('<circle cx="5" cy="19" r="2"/><circle cx="19" cy="5" r="2"/><path d="M6.5 17.5l11-11"/>')+'</button><button data-tool="h" aria-label="Horizontal">'+I('<path d="M3 12h18"/>')+'</button><button data-tool="r" aria-label="Rectángulo">'+I('<rect x="4" y="6" width="16" height="12" rx="1"/>')+'</button><button id="undo" aria-label="Deshacer">'+I('<path d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3"/>')+'</button><button id="clr" aria-label="Borrar todo">'+I('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>')+'</button></div>';
 $('c').appendChild(ov);
-let tool=null,pend=null,draws=[],objs=[],setLvl=null,dtOn=false,W=0,H=0;
+let tool=null,pend=null,draws=[],objs=[],setLvl=null,dtOn=false,W=0,H=0,rd=null;
 const dkey=()=>'dib-'+sym;
 function loadDraws(){try{draws=JSON.parse(localStorage.getItem(dkey())||'[]')}catch(e){draws=[]}}
 function saveDraws(){try{localStorage.setItem(dkey(),JSON.stringify(draws))}catch(e){}}
 function drawAll(){objs.forEach(l=>cs.removePriceLine(l));objs=[];
  draws.forEach(d=>{if(d.k==='h')objs.push(cs.createPriceLine({price:d.p,color:'#e8618c',lineWidth:1,lineStyle:0,axisLabelVisible:true,title:''}))})}
 function hint(){$('brp').classList.toggle('on',!!(rpArm||rp.on));const t=rpArm?'Toca la vela donde quieres empezar el replay':alArm?'Toca el precio o el RSI donde quieras la alarma':setLvl==='tp'?'Toca el gráfico para fijar tu take profit':setLvl==='sl'?'Toca el gráfico para fijar tu stop loss':
- tool==='h'?'Toca donde quieras la línea':tool==='t'||tool==='r'?(pend?'Toca el segundo punto':'Toca el primer punto'):'';
+ tool==='r'?'Arrastra sobre el gráfico para dibujar el rectángulo':tool==='h'?'Toca donde quieras la línea':tool==='t'?(pend?'Toca el segundo punto':'Toca el primer punto'):'';
  $('hint').textContent=t;$('hint').style.display=t?'block':'none'}
-function toolsUI(){if(tool||setLvl){alArm=false;rpArm=false}document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('on',x.dataset.tool===tool));
+function toolsUI(){if(tool||setLvl){alArm=false;rpArm=false}const rr=tool==='r';chart.applyOptions({handleScroll:!rr,handleScale:!rr});cEl.style.touchAction=rr?'none':'';document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('on',x.dataset.tool===tool));
  $('ptp').classList.toggle('act',setLvl==='tp');$('psl').classList.toggle('act',setLvl==='sl');$('bdraw').classList.toggle('on',dtOn)}
 document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{const t=b.dataset.tool;tool=tool===t?null:t;pend=null;setLvl=null;toolsUI();hint()});
 $('bdraw').onclick=()=>{dtOn=!dtOn;$('dt').style.display=dtOn?'flex':'none';if(!dtOn){tool=null;pend=null}toolsUI();hint()};
@@ -257,6 +257,7 @@ function tap(x,y){if(!cands.length||x<0||y<0||x>W||y>H)return;const pr=cs.coordi
   pos[setLvl]=pr;setLvl=null;toolsUI();hint();drawLine();return}
  if(!tool)return;
  if(tool==='h'){draws.push({k:'h',p:pr});saveDraws();drawAll();return}
+ if(tool==='r')return;
  const L=chart.timeScale().coordinateToLogical(x);if(L==null)return;
  const pt={t:L2t(L),p:pr};
  if(!pend){pend=pt;hint();return}
@@ -264,12 +265,21 @@ function tap(x,y){if(!cands.length||x<0||y<0||x>W||y>H)return;const pr=cs.coordi
  draws.push({k:tool,t1:a.t,p1:a.p,t2:b.t,p2:b.p});pend=null;saveDraws();hint()}
 /* Toques propios sobre el gráfico (funcionan en cualquier zona) */
 let dn=null;const cEl=$('c');
-cEl.addEventListener('pointerdown',e=>{dn={x:e.clientX,y:e.clientY,t:Date.now()}},true);
-cEl.addEventListener('pointerup',e=>{if(!dn)return;const d=dn;dn=null;
+cEl.addEventListener('pointerdown',e=>{dn={x:e.clientX,y:e.clientY,t:Date.now()};
+ if(tool==='r'&&!(e.target.closest&&e.target.closest('.pt,.lt,.dt'))){const r=cEl.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+  if(x>=0&&y>=0&&x<=W&&y<=H){rd={x0:x,y0:y,x1:x,y1:y};try{cEl.setPointerCapture(e.pointerId)}catch(_){}}}},true);
+cEl.addEventListener('pointermove',e=>{if(!rd)return;const r=cEl.getBoundingClientRect();
+ rd.x1=Math.max(0,Math.min(W,e.clientX-r.left));rd.y1=Math.max(0,Math.min(H,e.clientY-r.top));e.preventDefault()},true);
+function commitRect(q){const ts=chart.timeScale(),L0=ts.coordinateToLogical(q.x0),L1=ts.coordinateToLogical(q.x1),p0=cs.coordinateToPrice(q.y0),p1=cs.coordinateToPrice(q.y1);
+ if(L0==null||L1==null||p0==null||p1==null)return;
+ let a={t:L2t(L0),p:p0},b={t:L2t(L1),p:p1};if(a.t>b.t){const z=a;a=b;b=z}
+ draws.push({k:'r',t1:a.t,p1:a.p,t2:b.t,p2:b.p});saveDraws();tool=null;toolsUI();hint()}
+cEl.addEventListener('pointerup',e=>{if(rd){const q=rd;rd=null;dn=null;if(Math.hypot(q.x1-q.x0,q.y1-q.y0)>8)commitRect(q);return}
+ if(!dn)return;const d=dn;dn=null;
  if(Math.hypot(e.clientX-d.x,e.clientY-d.y)>10||Date.now()-d.t>600)return;
  if(e.target.closest&&e.target.closest('.pt,.lt,.dt'))return;
  const r=cEl.getBoundingClientRect();tap(e.clientX-r.left,e.clientY-r.top)},true);
-cEl.addEventListener('pointercancel',()=>{dn=null},true);
+cEl.addEventListener('pointercancel',()=>{dn=null;rd=null},true);
 /* Toques sobre el panel del RSI (para elegir el nivel de una alarma) */
 const rEl=$('r');let dn2=null;
 rEl.addEventListener('pointerdown',e=>{dn2={x:e.clientX,y:e.clientY,t:Date.now()}},true);
@@ -301,6 +311,7 @@ function loop(){requestAnimationFrame(loop);
    if(d.k==='r')h+='<rect x="'+Math.min(x1,x2)+'" y="'+Math.min(y1,y2)+'" width="'+Math.abs(x2-x1)+'" height="'+Math.abs(y2-y1)+'" fill="rgba(62,193,211,.15)" stroke="#3ec1d3" stroke-width="1.5"/>';
    else h+='<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#3ec1d3" stroke-width="2" stroke-linecap="round"/>'});
   if(pend){const x=X(pend.t),y=Y(pend.p);if(x!=null&&y!=null)h+='<circle cx="'+x+'" cy="'+y+'" r="5" fill="#3ec1d3"/>'}}
+ if(rd&&Math.hypot(rd.x1-rd.x0,rd.y1-rd.y0)>2)h+='<rect x="'+Math.min(rd.x0,rd.x1)+'" y="'+Math.min(rd.y0,rd.y1)+'" width="'+Math.abs(rd.x1-rd.x0)+'" height="'+Math.abs(rd.y1-rd.y0)+'" fill="rgba(62,193,211,.15)" stroke="#3ec1d3" stroke-width="1.5"/>';
  if(h!==lastSvg){svg.innerHTML=h;lastSvg=h}
  const live=!!(pos&&pos.sym===sym&&cands.length);
  if(place($('pt'),live?pos.entry:null)){const u=unreal(),pc=u/pos.amount*100;
@@ -351,7 +362,7 @@ function stepReplay(){if(!rp.on)return;
   if(px!=null)closePos(w,px)}
  render();rpUI()}
 function exitReplay(){if(!rp.on)return;clearInterval(rp.t);if(pos)closePos('Replay terminado: se cerró tu posición.');
- events.length=Math.min(events.length,rp.evStart);rp={on:false};rpUI();hint();status('Conectando…');load()}
+ events=events.filter(e=>!e.rpl);rp={on:false};drawMarkers();drawLine();rpUI();hint();status('Conectando…');load()}
 $('rpplay').onclick=()=>{rp.play=!rp.play;rpTimer()};
 $('rpstep').onclick=()=>{rp.play=false;rpTimer();stepReplay()};
 $('rpspd').onclick=()=>{rp.si=(rp.si+1)%SPD.length;rpTimer()};

@@ -13,12 +13,13 @@ const SYMS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'], TFS = ['1m
 const num = s => parseFloat(String(s).replace('d', '.'));
 function parse(p) {
   const a = p.split('_');
-  if (a[0] === 'p' && a.length === 4) return { tipo: 'precio', sym: a[1], dir: a[2], val: num(a[3]) };
-  if (a[0] === 'r' && a.length === 5) return { tipo: 'rsi', sym: a[1], dir: a[2], val: num(a[3]), tf: a[4] };
+  const rep = a[a.length - 1] === 'c'; // al final, "c" = alarma constante
+  if (a[0] === 'p' && a.length === (rep ? 5 : 4)) return { tipo: 'precio', sym: a[1], dir: a[2], val: num(a[3]), rep };
+  if (a[0] === 'r' && a.length === (rep ? 6 : 5)) return { tipo: 'rsi', sym: a[1], dir: a[2], val: num(a[3]), tf: a[4], rep };
   return null;
 }
 const valido = x => x && SYMS.includes(x.sym) && ['gt', 'lt'].includes(x.dir) && Number.isFinite(x.val) && (x.tipo === 'precio' || (TFS.includes(x.tf) && x.val >= 0 && x.val <= 100));
-const txt = x => x.tipo === 'precio' ? `${x.sym} precio ${x.dir === 'gt' ? '≥' : '≤'} ${x.val}` : `${x.sym} RSI 14 (${x.tf}) ${x.dir === 'gt' ? '≥' : '≤'} ${x.val}`;
+const txt = x => (x.tipo === 'precio' ? `${x.sym} precio ${x.dir === 'gt' ? '≥' : '≤'} ${x.val}` : `${x.sym} RSI 14 (${x.tf}) ${x.dir === 'gt' ? '≥' : '≤'} ${x.val}`) + (x.rep ? ' · constante' : ' · una vez');
 
 // 1) Comandos que llegaron al bot
 const up = await tg('getUpdates', { offset: (st.offset || 0) + 1, timeout: 0, allowed_updates: ['message'] });
@@ -66,7 +67,13 @@ for (const x of st.alarmas) {
     if (x.tipo === 'precio') v = parseFloat((await api('/api/v3/ticker/price?symbol=' + x.sym)).price);
     else { const k = await api(`/api/v3/klines?symbol=${x.sym}&interval=${x.tf}&limit=500`); v = rsi14(k.map(a => +a[4])); }
     const hit = x.dir === 'gt' ? v >= x.val : v <= x.val;
-    if (hit) await say(`🔔 ${txt(x)}\nValor actual: ${v.toFixed(x.tipo === 'rsi' ? 1 : (v >= 100 ? 2 : 5))}`);
+    const dato = `🔔 ${txt(x)}\nValor actual: ${v.toFixed(x.tipo === 'rsi' ? 1 : (v >= 100 ? 2 : 5))}`;
+    if (x.rep) {
+      // Constante: avisa cuando se cumple y vuelve a armarse cuando la condición deja de cumplirse
+      if (hit && !x.esp) { await say(dato); x.esp = true; }
+      else if (!hit) x.esp = false;
+      keep.push(x);
+    } else if (hit) await say(dato);
     else keep.push(x);
   } catch (e) { console.error(e.message); keep.push(x); }
 }

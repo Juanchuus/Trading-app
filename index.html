@@ -8,7 +8,7 @@
 <style>
 :root{--bg:#000;--panel:#121416;--line:#24282c;--ink:#eceff1;--muted:#8a929a;--up:#26c281;--down:#f6616b;--amber:#e0a63a;--cy:#3ec1d3}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:14px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums}
+html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none;background:var(--bg);color:var(--ink);font:14px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums}
 #app{display:flex;flex-direction:column;height:100dvh;max-width:560px;margin:0 auto;padding-top:env(safe-area-inset-top,0px)}
 header{display:flex;justify-content:space-between;align-items:center;padding:8px 14px}
 select{font:inherit;color:var(--ink);background:transparent;border:0;appearance:none;-webkit-appearance:none}
@@ -65,6 +65,8 @@ ul{list-style:none;margin:6px 0 0;padding:0;font-size:13px}li{display:flex;justi
 #rpbar .chip{margin:0;padding:7px 11px;font-size:13px}#rptime{flex:1;text-align:center}
 .sd{position:absolute;right:8px;top:8px;display:none;pointer-events:auto;background:#2c3238;color:#fff;border:1px solid var(--line);border-radius:14px;padding:5px 10px;font-size:12px;cursor:pointer}
 #levlbl{color:var(--cy);font-weight:600}.qty small{padding:3px 0;cursor:pointer}
+.alrow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line);font-size:13px}
+.alx{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:4px 9px;font:inherit;font-size:13px}
 .note{font-size:12px;color:var(--muted);margin:12px 0 0}
 </style>
 </head>
@@ -106,7 +108,7 @@ ul{list-style:none;margin:6px 0 0;padding:0;font-size:13px}li{display:flex;justi
 <ul id="hist"></ul>
 <button class="rb" id="reset">Reiniciar simulador</button>
 <p class="note">Precios reales de Binance con operaciones simuladas (sin dinero real). Comisión simulada: 0,1% por lado sobre el valor total de la posición. La liquidación es aproximada (sin margen de mantenimiento).</p>
-<p class="note">Versión: 19 oct · dibujos editables y apalancamiento (d)</p></div>
+<p class="note">Versión: 19 oct · marcas, alarmas y Telegram (e)</p></div>
 
 <div class="sheet" id="s-al"><h2>Nueva alarma</h2><p class="note" style="margin:0 0 12px" id="al-par"></p>
 <button class="rb" id="al-pick" style="margin:0 0 14px">Elegir tocando el gráfico (precio o RSI)</button>
@@ -116,7 +118,9 @@ ul{list-style:none;margin:6px 0 0;padding:0;font-size:13px}li{display:flex;justi
 <div><label for="al-f">Frecuencia</label><select id="al-f"><option value="u">Una sola vez</option><option value="c">Constante</option></select></div>
 <div id="al-tfw" style="display:none"><label for="al-tf">Temporalidad</label><select id="al-tf"><option value="1m">1m</option><option value="5m">5m</option><option value="15m">15m</option><option value="1h">1H</option><option value="4h">4H</option><option value="1d">1D</option></select></div></div>
 <p class="note">Se abre Telegram: toca Iniciar para confirmar. La alarma se revisa cada pocos minutos y avisa una sola vez.</p>
-<button class="rb" id="al-go">Crear alarma en Telegram</button></div>
+<button class="rb" id="al-go">Crear alarma en Telegram</button>
+<button class="rb" id="al-ping" style="margin-top:8px">Probar conexión con el bot</button>
+<h2 style="margin:18px 0 4px;font-size:14px">Alarmas activas</h2><div id="al-list"></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
@@ -209,7 +213,7 @@ function openPos(side){if(pos){msg('Ya tienes una posición abierta. Ciérrala c
  if(!(a>0)){msg('Escribe un monto válido.');return}if(a>eq){msg('El monto supera tu saldo disponible.');return}
  pos={sym,side,entry:price(),qty:a*lev/price(),amount:a,lev,notional:a*lev,liq:lev>1?price()*(1-side/lev):null,sl:null,tp:null};setLv();events.push({time:nowT(),kind:'in',side,sym,rpl:rp.on});msg('');drawMarkers();drawLine();render()}
 function closePos(why,px){if(!pos)return;const ex=px!=null?px:price(),pnl=Math.max(-pos.amount,pos.side*(ex-pos.entry)*pos.qty-pos.notional*0.001*2);
- realized+=pnl;hist.unshift({sym:pos.sym,side:pos.side,entry:pos.entry,exit:ex,pnl,lev:pos.lev});events.push({time:nowT(),kind:'out',side:pos.side,sym:pos.sym,rpl:rp.on});
+ realized+=pnl;hist.unshift({sym:pos.sym,side:pos.side,entry:pos.entry,exit:ex,pnl,lev:pos.lev});events=[];
  pos=null;msg(why||'');drawMarkers();drawLine();render()}
 function render(){const u=unreal(),cap=parseFloat($('cap').value)||0,eq=cap+realized+u;
  $('eq').textContent='$'+fmt(eq);$('eq').className=eq>=cap?'up':'down';
@@ -368,7 +372,11 @@ function drawAlarms(){alObjs.forEach(o=>{try{o.s.removePriceLine(o.l)}catch(e){}
   const el=document.createElement('div');el.className='al';
   el.innerHTML=BELL+'<span>'+(x.dir==='gt'?'≥':'≤')+' '+fmt(x.val,x.tipo==='rsi'?1:dp(x.val))+(x.rep?' ↻':'')+'</span>';
   box.appendChild(el);alObjs.push({s,l,el,val:x.val})})}
-async function fetchAlarms(){try{const r=await fetch('alertas.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();alData=j.alarmas||[];drawAlarms()}catch(e){}}
+async function fetchAlarms(){try{const r=await fetch('alertas.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();alData=j.alarmas||[];drawAlarms();renderAlList()}catch(e){}}
+const alTxt=x=>(x.tipo==='precio'?x.sym+' precio '+(x.dir==='gt'?'≥':'≤')+' '+x.val:x.sym+' RSI 14 ('+x.tf+') '+(x.dir==='gt'?'≥':'≤')+' '+x.val)+(x.rep?' · constante':' · una vez');
+function renderAlList(){const el=$('al-list');if(!el)return;
+ el.innerHTML=alData.length?alData.map(x=>'<div class="alrow"><span>'+alTxt(x)+'</span>'+(x.id?'<button class="alx" data-id="'+x.id+'" aria-label="Borrar alarma">🗑</button>':'')+'</div>').join(''):'<p class="note" style="margin:4px 0">No hay alarmas activas.</p>';
+ el.querySelectorAll('.alx').forEach(b=>b.onclick=()=>{window.open('https://t.me/'+BOT+'?start=b_'+b.dataset.id,'_blank')})}
 setInterval(fetchAlarms,60000);
 /* Modo replay: reproduce el pasado vela por vela */
 const SPD=[1,2,5,10];
@@ -400,7 +408,7 @@ function stepReplay(){if(!rp.on)return;
   if(px!=null)closePos(w,px)}
  render();rpUI()}
 function exitReplay(){if(!rp.on)return;clearInterval(rp.t);if(pos)closePos('Replay terminado: se cerró tu posición.');
- events=events.filter(e=>!e.rpl);rp={on:false};drawMarkers();drawLine();rpUI();hint();status('Conectando…');load()}
+ events=[];rp={on:false};drawMarkers();drawLine();rpUI();hint();status('Conectando…');load()}
 $('rpplay').onclick=()=>{rp.play=!rp.play;rpTimer()};
 $('rpstep').onclick=()=>{rp.play=false;rpTimer();stepReplay()};
 $('rpspd').onclick=()=>{rp.si=(rp.si+1)%SPD.length;rpTimer()};
@@ -416,6 +424,7 @@ $('bd').onclick=closeSheets;$('bind').onclick=()=>sheet('s-ind');$('bacc').oncli
 const BOT='Tradeaahh_bot';
 function alForm(){const r=$('al-t').value==='r';$('al-tfw').style.display=r?'block':'none';$('al-v').value=r?'30':(price()?price().toFixed(dp(price())):'')}
 $('al-t').onchange=alForm;
+$('al-ping').onclick=()=>{window.open('https://t.me/'+BOT+'?start=ping','_blank')};
 $('al-pick').onclick=()=>{closeSheets();tool=null;setLvl=null;pend=null;alArm=true;toolsUI();hint()};
 $('bal').onclick=()=>{if(alArm){alArm=false;hint();return}
  if(lastMark&&Date.now()-lastMark.t<900000){openAlarm(lastMark.pane,lastMark.val);return}$('al-tf').value=tf==='1D'?'1d':tf;$('al-par').textContent='Par: '+sym;alForm();sheet('s-al')};

@@ -108,7 +108,7 @@ ul{list-style:none;margin:6px 0 0;padding:0;font-size:13px}li{display:flex;justi
 <ul id="hist"></ul>
 <button class="rb" id="reset">Reiniciar simulador</button>
 <p class="note">Precios reales de Binance con operaciones simuladas (sin dinero real). Comisión simulada: 0,1% por lado sobre el valor total de la posición. La liquidación es aproximada (sin margen de mantenimiento).</p>
-<p class="note">Versión: 19 oct · marcas, alarmas y Telegram (e)</p></div>
+<p class="note">Versión: 19 oct · bot nuevo y Telegram (f)</p></div>
 
 <div class="sheet" id="s-al"><h2>Nueva alarma</h2><p class="note" style="margin:0 0 12px" id="al-par"></p>
 <button class="rb" id="al-pick" style="margin:0 0 14px">Elegir tocando el gráfico (precio o RSI)</button>
@@ -421,7 +421,7 @@ $('brp').onclick=()=>{if(rp.on){exitReplay();return}if(rpArm){rpArm=false;hint()
 function closeSheets(){clearTmp();document.querySelectorAll('.sheet').forEach(x=>{x.style.display='none'});$('bd').style.display='none'}
 function sheet(id){const o=$(id).style.display!=='block';closeSheets();if(o){$(id).style.display='block';$('bd').style.display='block'}}
 $('bd').onclick=closeSheets;$('bind').onclick=()=>sheet('s-ind');$('bacc').onclick=()=>sheet('s-acc');
-const BOT='Tradeaahh_bot';
+const BOT='Tradinviu_bot';
 function alForm(){const r=$('al-t').value==='r';$('al-tfw').style.display=r?'block':'none';$('al-v').value=r?'30':(price()?price().toFixed(dp(price())):'')}
 $('al-t').onchange=alForm;
 $('al-ping').onclick=()=>{window.open('https://t.me/'+BOT+'?start=ping','_blank')};

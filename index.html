@@ -106,9 +106,12 @@ ul{list-style:none;margin:6px 0 0;padding:0;font-size:13px}li{display:flex;justi
 <div><label for="tp">Take profit (%)</label><input id="tp" type="number" placeholder="Opcional" min="0" step="0.1"></div></div>
 <div class="stats"><div><span>Saldo total</span><br><b id="eq">–</b></div><div><span>Posición abierta</span><br><b id="open">Ninguna</b></div><div><span>Operaciones</span><br><b id="nt">0</b></div><div><span>Aciertos</span><br><b id="wr">–</b></div></div>
 <ul id="hist"></ul>
+<h2 style="margin:16px 0 6px;font-size:14px">Servidor de alarmas</h2>
+<div class="g2"><div><label for="srv-url">Dirección</label><input id="srv-url" type="url" placeholder="https://...workers.dev" autocomplete="off"></div><div><label for="srv-key">Clave de acceso</label><input id="srv-key" type="password" autocomplete="off"></div></div>
+<button class="rb" id="srv-save" style="margin-top:10px">Guardar servidor</button><p class="note" id="srv-st"></p>
 <button class="rb" id="reset">Reiniciar simulador</button>
 <p class="note">Precios reales de Binance con operaciones simuladas (sin dinero real). Comisión simulada: 0,1% por lado sobre el valor total de la posición. La liquidación es aproximada (sin margen de mantenimiento).</p>
-<p class="note">Versión: 19 oct · bot nuevo y Telegram (f)</p></div>
+<p class="note">Versión: 19 oct · servidor propio (g)</p></div>
 
 <div class="sheet" id="s-al"><h2>Nueva alarma</h2><p class="note" style="margin:0 0 12px" id="al-par"></p>
 <button class="rb" id="al-pick" style="margin:0 0 14px">Elegir tocando el gráfico (precio o RSI)</button>
@@ -372,12 +375,20 @@ function drawAlarms(){alObjs.forEach(o=>{try{o.s.removePriceLine(o.l)}catch(e){}
   const el=document.createElement('div');el.className='al';
   el.innerHTML=BELL+'<span>'+(x.dir==='gt'?'≥':'≤')+' '+fmt(x.val,x.tipo==='rsi'?1:dp(x.val))+(x.rep?' ↻':'')+'</span>';
   box.appendChild(el);alObjs.push({s,l,el,val:x.val})})}
-async function fetchAlarms(){try{const r=await fetch('alertas.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();alData=j.alarmas||[];drawAlarms();renderAlList()}catch(e){}}
+/* Servidor propio de alarmas (Cloudflare): si está configurado, se usa en lugar del archivo de GitHub */
+let srv=null;try{srv=JSON.parse(localStorage.getItem('srv')||'null')}catch(e){}
+const srvOn=()=>!!(srv&&srv.url&&srv.key);
+async function srvApi(ruta,metodo,cuerpo){const r=await fetch(srv.url.replace(/\/+$/,'')+ruta,{method:metodo||'GET',headers:{'content-type':'application/json','x-key':srv.key},body:cuerpo?JSON.stringify(cuerpo):undefined});
+ const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||('error '+r.status));return j}
+async function fetchAlarms(){try{
+ if(srvOn()){alData=(await srvApi('/api/alarmas')).alarmas||[]}
+ else{const r=await fetch('alertas.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;alData=(await r.json()).alarmas||[]}
+ drawAlarms();renderAlList()}catch(e){}}
 const alTxt=x=>(x.tipo==='precio'?x.sym+' precio '+(x.dir==='gt'?'≥':'≤')+' '+x.val:x.sym+' RSI 14 ('+x.tf+') '+(x.dir==='gt'?'≥':'≤')+' '+x.val)+(x.rep?' · constante':' · una vez');
 function renderAlList(){const el=$('al-list');if(!el)return;
  el.innerHTML=alData.length?alData.map(x=>'<div class="alrow"><span>'+alTxt(x)+'</span>'+(x.id?'<button class="alx" data-id="'+x.id+'" aria-label="Borrar alarma">🗑</button>':'')+'</div>').join(''):'<p class="note" style="margin:4px 0">No hay alarmas activas.</p>';
- el.querySelectorAll('.alx').forEach(b=>b.onclick=()=>{window.open('https://t.me/'+BOT+'?start=b_'+b.dataset.id,'_blank')})}
-setInterval(fetchAlarms,60000);
+ el.querySelectorAll('.alx').forEach(b=>b.onclick=()=>{if(srvOn()){srvApi('/api/alarmas/'+b.dataset.id,'DELETE').then(()=>{msg('Alarma borrada');fetchAlarms()}).catch(e=>msg('No se pudo borrar: '+e.message))}else window.open('https://t.me/'+BOT+'?start=b_'+b.dataset.id,'_blank')})}
+setInterval(fetchAlarms,30000);
 /* Modo replay: reproduce el pasado vela por vela */
 const SPD=[1,2,5,10];
 function rpUI(){const on=rp.on;$('rpbar').style.display=on?'flex':'none';if(!on)return;
@@ -424,7 +435,12 @@ $('bd').onclick=closeSheets;$('bind').onclick=()=>sheet('s-ind');$('bacc').oncli
 const BOT='Tradinviu_bot';
 function alForm(){const r=$('al-t').value==='r';$('al-tfw').style.display=r?'block':'none';$('al-v').value=r?'30':(price()?price().toFixed(dp(price())):'')}
 $('al-t').onchange=alForm;
-$('al-ping').onclick=()=>{window.open('https://t.me/'+BOT+'?start=ping','_blank')};
+$('al-ping').onclick=()=>{if(srvOn()){srvApi('/api/ping').then(j=>msg('Servidor conectado ✅ Alarmas activas: '+j.n+'. Revisa Telegram')).catch(e=>msg('Sin conexión con el servidor: '+e.message))}else window.open('https://t.me/'+BOT+'?start=ping','_blank')};
+$('srv-url').value=srv?srv.url:'';$('srv-key').value=srv?srv.key:'';$('srv-st').textContent=srvOn()?'Servidor configurado.':'Sin servidor: se usa Telegram con retraso.';
+$('srv-save').onclick=()=>{const u=$('srv-url').value.trim(),k=$('srv-key').value.trim();
+ if(!u||!k){srv=null;try{localStorage.removeItem('srv')}catch(e){}$('srv-st').textContent='Servidor desactivado: se usa Telegram con retraso.';fetchAlarms();return}
+ srv={url:u,key:k};try{localStorage.setItem('srv',JSON.stringify(srv))}catch(e){}$('srv-st').textContent='Probando conexión…';
+ srvApi('/api/alarmas').then(j=>{$('srv-st').textContent='Conectado ✅ Alarmas activas: '+(j.alarmas||[]).length;alData=j.alarmas||[];drawAlarms();renderAlList()}).catch(e=>{$('srv-st').textContent='No se pudo conectar: '+e.message})};
 $('al-pick').onclick=()=>{closeSheets();tool=null;setLvl=null;pend=null;alArm=true;toolsUI();hint()};
 $('bal').onclick=()=>{if(alArm){alArm=false;hint();return}
  if(lastMark&&Date.now()-lastMark.t<900000){openAlarm(lastMark.pane,lastMark.val);return}$('al-tf').value=tf==='1D'?'1d':tf;$('al-par').textContent='Par: '+sym;alForm();sheet('s-al')};
@@ -432,6 +448,7 @@ $('al-go').onclick=()=>{const v=parseFloat($('al-v').value),r=$('al-t').value===
  if(!(v>=0)||(r&&v>100)){msg('Escribe un valor válido.');return}
  const s=String(+v.toFixed(8)).replace('.','d');if(/[^0-9d]/.test(s)){msg('Ese valor no es válido.');return}
  const q=r?['r',sym,$('al-d').value,s,$('al-tf').value]:['p',sym,$('al-d').value,s];if($('al-f').value==='c')q.push('c');const p=q.join('_');
+ if(srvOn()){srvApi('/api/alarmas','POST',{tipo:r?'rsi':'precio',sym,dir:$('al-d').value,val:v,tf:r?$('al-tf').value:undefined,rep:$('al-f').value==='c'}).then(()=>{msg('Alarma creada ✅ La confirmación llega a Telegram');fetchAlarms();closeSheets()}).catch(e=>msg('No se pudo crear: '+e.message));return}
  window.open('https://t.me/'+BOT+'?start='+p,'_blank')};
 
 /* Datos reales de Binance */

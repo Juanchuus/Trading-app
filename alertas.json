@@ -1,15 +1,5 @@
 {
  "offset": 14070973,
- "alarmas": [
-  {
-   "tipo": "rsi",
-   "sym": "BTCUSDT",
-   "dir": "lt",
-   "val": 54.3,
-   "tf": "1h",
-   "rep": false,
-   "id": 2
-  }
- ],
+ "alarmas": [],
  "nextId": 4
 }
